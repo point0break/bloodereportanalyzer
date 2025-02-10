@@ -1,0 +1,44 @@
+
+
+@app.route("/process-file", methods=["POST"])
+def process_file():
+    """Extract text from image and make predictions."""
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file_path = os.path.join("temp", file.filename)
+    try:
+        file.save(file_path)
+    except Exception as e:
+        return jsonify({"error": f"Error saving file: {str(e)}"}), 500
+
+    try:
+        # Perform OCR on Image
+        image = Image.open(file_path)
+        extracted_text = pytesseract.image_to_string(image,lang='eng')
+
+        if not extracted_text.strip():
+            return jsonify({"error": "No text extracted from the file."}), 400
+
+        # Preprocess extracted text
+        input_data = preprocess_text(extracted_text)
+        if input_data is None:
+            return jsonify({"error": "Failed to preprocess text for model."}), 400
+
+        # Ensure model is loaded
+        if model is None:
+            return jsonify({"error": "Model is not loaded. Please check the model file."}), 500
+
+        # Perform prediction
+        prediction = model.predict(input_data)
+        result = format_prediction(prediction)
+
+    except Exception as e:
+        return jsonify({"error": f"Error during processing: {str(e)}"}), 500
+    finally:
+        # Cleanup temp file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    return jsonify({"extracted_text": extracted_text, "prediction": result})
