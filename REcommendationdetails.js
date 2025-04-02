@@ -1,100 +1,171 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./RecommendationDetails.css";
-
-// Knowledge Base
-const knowledgeBase = {
-  "Check WBC levels":
-    "White blood cells (WBCs) are crucial for fighting infections. Abnormal levels may indicate an infection or immune system issue.",
-  "Check RBC levels":
-    "Red blood cells (RBCs) carry oxygen throughout the body. Low levels may indicate anemia or other conditions.",
-  "Check Hemoglobin levels":
-    "Hemoglobin is essential for transporting oxygen in the blood. Low hemoglobin levels may indicate anemia.",
-  "Check Platelet levels":
-    "Platelets help with blood clotting. Abnormal levels may increase the risk of bleeding or clotting disorders.",
-  "Check Glucose levels":
-    "Glucose levels are critical for energy production. High or low levels may indicate diabetes or hypoglycemia.",
-  "Check Cholesterol levels":
-    "Cholesterol is important for cell membrane structure. High levels may increase the risk of heart disease.",
-  "Check Neutrophil levels":
-    "Neutrophils are a type of white blood cell that fights bacterial infections. Abnormal levels may indicate infection or inflammation.",
-  "Check Lymphocyte levels":
-    "Lymphocytes are part of the immune system. Abnormal levels may indicate viral infections or immune disorders.",
-  "Check Eosinophil levels":
-    "Eosinophils are involved in allergic reactions and fighting parasitic infections. Abnormal levels may indicate allergies or parasitic infections.",
-  "Check MCV levels":
-    "MCV measures the average size of red blood cells. Abnormal levels may indicate anemia or other conditions.",
-  "Check MCH levels":
-    "MCH measures the average amount of hemoglobin in red blood cells. Abnormal levels may indicate anemia or other conditions.",
-  "Check MCHC levels":
-    "MCHC measures the concentration of hemoglobin in red blood cells. Abnormal levels may indicate anemia or other conditions.",
-  "Check Hematocrit levels":
-    "Hematocrit measures the proportion of red blood cells in your blood. Abnormal levels may indicate anemia or dehydration.",
-};
+import { Tooltip } from "react-tooltip";
+import FocusTrap from "focus-trap-react";
 
 function RecommendationDetails() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { prediction, from } = location.state || {};
-  const [expandedRecommendation, setExpandedRecommendation] = useState(null);
 
-  // Memoize the recommendationsArray to prevent unnecessary recalculations
-  const recommendationsArray = useMemo(() => {
-    return Array.isArray(prediction?.recommendations)
-      ? prediction.recommendations
-      : prediction?.recommendations?.split(/,\s*|;\s*/) || [];
-  }, [prediction]);
+  // Extract recommendations from location.state
+  const recommendations = location.state?.recommendations || [];
+  console.log("Recommendations in RecommendationDetails:", recommendations); // Debug log
 
-  // Log recommendations for debugging
-  useEffect(() => {
-    console.log("Recommendations:", recommendationsArray);
-    recommendationsArray.forEach((rec) => {
-      if (!knowledgeBase[rec]) {
-        console.warn(`No knowledge base entry found for: ${rec}`);
-      }
-    });
-  }, [recommendationsArray]);
+  // Filter to show only out-of-range parameters (with explanation and remedy)
+  const outOfRangeItems = recommendations.filter(
+    (item) => item.explanation && item.remedy
+  );
+
+  // State to manage the modal visibility and selected parameter
+  const [showModal, setShowModal] = useState(false);
+  const [selectedParameter, setSelectedParameter] = useState(null);
+  const [loadingModal, setLoadingModal] = useState(false);
+  // Open the modal with the selected parameter's details
+  const openModal = (item) => {
+    setLoadingModal(true);
+  setTimeout(() => { // Simulate a delay (remove in production if not needed)
+    setSelectedParameter(item);
+    setShowModal(true);
+    setLoadingModal(false);
+  }, 500);
+  };
+
+  // Close the modal
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedParameter(null);
+  };
+
+  // Close the modal when clicking outside the content
+  const handleOverlayClick = (e) => {
+    // Check if the click target is the overlay (not the modal content)
+    if (e.target.classList.contains("modal-overlay")) {
+      closeModal();
+    }
+  };
 
   // Handle back navigation
   const handleBack = () => {
-    navigate(from || "/");
+    navigate(location.state?.from || "/analyzer");
   };
 
+  // Add Escape key support to close the modal
+  React.useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape" && showModal) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showModal]);
+
   // Render no recommendations message if none are available
-  if (!recommendationsArray || recommendationsArray.length === 0) {
+  if (!outOfRangeItems || outOfRangeItems.length === 0) {
     return (
-      <div className="no-recommendations">
-        <p>No recommendations available.</p>
-        <button onClick={handleBack}>Back</button>
+      <div className="recommendation-details-container">
+        <h2>Recommendation Details</h2>
+        <p className="no-recommendations">No out-of-range values detected.</p>
+        <div className="text-center mt-4">
+          <button
+            className="btn btn-primary"
+            onClick={handleBack}
+            aria-label="Go back to previous page"
+          >
+            Back
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="recommendation-details-container">
-      <h2>Knowledge Base</h2>
-      <button className="back-button" onClick={handleBack}>
-        Back
-      </button>
-      <ul className="recommendations-list">
-        {recommendationsArray.map((rec, index) => (
-          <li key={index} className="recommendation-item">
+      <h2>Recommendation Details</h2>
+      <div className="recommendations-grid" aria-label="Grid of out-of-range parameters and recommendations">
+        {outOfRangeItems.map((item, index) => (
+          <div key={index} className="recommendation-card">
+            <div className="recommendation-card-header">
+              <h5>{item.parameter}</h5>
+              <span
+  className={`flag ${item.flag.toLowerCase()}`}
+  data-tooltip-id={`flag-tooltip-${index}`}
+  data-tooltip-content={
+    item.flag.toLowerCase() === "low"
+      ? "Below normal range, may indicate a health issue."
+      : "Above normal range, may indicate a health issue."
+  }
+>
+  {item.flag}
+</span>
+<Tooltip id={`flag-tooltip-${index}`} place="top" effect="solid" />
+            </div>
+            <div className="recommendation-card-body">
+              <p>
+                <strong>Result:</strong> {item.result} {item.unit}
+              </p>
+            </div>
             <button
-              className="recommendation-button"
-              onClick={() =>
-                setExpandedRecommendation(expandedRecommendation === rec ? null : rec)
-              }
+              onClick={() => openModal(item)}
+              className="btn btn-secondary btn-sm"
+              aria-label={`View details for ${item.parameter}`}
             >
-              {rec}
+              View Details
             </button>
-            {expandedRecommendation === rec && (
-              <div className="tooltip">
-                {knowledgeBase[rec] || "No detailed information available."}
-              </div>
-            )}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
+
+      {/* Modal for displaying details */}
+      {showModal && selectedParameter &&  !loadingModal ? (
+        <FocusTrap>
+        <div className="modal-overlay" onClick={handleOverlayClick}>
+          <div className="modal-content bg-light p-4 rounded">
+            <div className="modal-header">
+              <h3>
+                {selectedParameter.parameter} ({selectedParameter.result} {selectedParameter.unit}) - {selectedParameter.flag}
+              </h3>
+              <button
+                onClick={closeModal}
+                className="modal-close-btn"
+                aria-label="Close details modal"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>
+                <strong>Explanation:</strong> {selectedParameter.explanation}
+              </p>
+              <p>
+                <strong>Remedy:</strong> {selectedParameter.remedy}
+              </p>
+            </div>
+          </div>
+        </div>
+        </FocusTrap>
+      ) : loadingModal ? (
+        <div className="modal-overlay">
+          <div className="modal-content bg-light p-4 rounded">
+            <div className="text-center">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="text-center mt-4">
+        <button
+          className="btn btn-primary"
+          onClick={handleBack}
+          aria-label="Go back to previous page"
+        >
+          Back
+        </button>
+      </div>
     </div>
   );
 }
