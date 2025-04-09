@@ -31,7 +31,7 @@ CORS(app)
 # Configure Tesseract
 pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 
-# Load Model (if still needed for risk prediction)
+
 MODEL_PATH = r"C:\\Users\\Allen\\Desktop\\blood\\Trained model\\rf_model (1).pkl"
 try:
     model = load(MODEL_PATH)
@@ -332,7 +332,7 @@ def analyze_blood_report(extracted_text):
     out_of_range = []
     risk_score = 0
 
-    # Analyze each parameter
+    # Analyze parameter
     for param, result, flag in data:
         if param in ranges:
             normal_range = ranges[param]["normal"]
@@ -340,7 +340,7 @@ def analyze_blood_report(extracted_text):
             explanation = None
             remedy = None
 
-            # Determine the actual status based on the value
+           
             determined_flag = flag.lower()
             if result < normal_range[0]:
                 determined_flag = "low"
@@ -364,7 +364,7 @@ def analyze_blood_report(extracted_text):
                 "remedy": remedy
             })
 
-    # Determine overall risk level
+    # overall risk level
     risk_level = "Low Risk"
     status = "Safe"
     if risk_score > 5:
@@ -402,7 +402,7 @@ def process_file():
             logging.warning("No text extracted from the file.")
             return jsonify({"error": "No text extracted from the file."}), 400
         
-        # Analyze the extracted text using the new logic
+        
         prediction = analyze_blood_report(extracted_text)
         logging.info(f"Prediction: {prediction}")
         
