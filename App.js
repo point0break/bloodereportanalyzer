@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Route, Routes, Link } from "react-router-dom";
 import { AnalysisProvider } from "./context/AnalysisContext";
 import "bootstrap/dist/css/bootstrap.min.css";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { AnalysisContext } from "./context/AnalysisContext";
 import RecommendationDetails from "./components/RecommendationDetails";
@@ -17,6 +17,9 @@ import {
   FaHistory,
   FaComment,
   FaBook,
+  FaBars,
+  FaTimes,
+  FaTimesCircle,
 } from "react-icons/fa";
 import "./App.css";
 
@@ -164,49 +167,96 @@ function HealthTips() {
   );
 }
 
-// Navbar Component
+// Navbar Component with Sliding Overlay
 function Navbar({ toggleTheme, theme }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
+  };
+
+  // Close menu when clicking outside
+  const handleOutsideClick = (e) => {
+    if (menuRef.current && !menuRef.current.contains(e.target) && isOpen) {
+      setIsOpen(false);
+    }
+  };
+
+  // Add event listener for outside clicks
+  useEffect(() => {
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [isOpen]);
+
+  // Close menu when a link is clicked (optional mobile behavior)
+  const handleLinkClick = () => {
+    if (window.innerWidth < 768) {
+      setIsOpen(false);
+    }
+  };
+
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav className="navbar navbar-dark bg-dark">
       <div className="container-fluid">
-        <Link to="/" className="navbar-brand">
-          <FaHome /> Home
+        <Link to="/" className="navbar-brand" onClick={handleLinkClick}>
+          <FaHome /> 
         </Link>
-        <div className="collapse navbar-collapse justify-content-end">
+        <button
+          className="navbar-toggler"
+          type="button"
+          onClick={toggleMenu}
+          aria-label="Toggle navigation"
+        >
+          <FaBars />
+        </button>
+        <div className={`overlay-menu ${isOpen ? "open" : ""}`} ref={menuRef}>
+          <button
+            className="close-btn"
+            onClick={toggleMenu}
+            aria-label="Close menu"
+          >
+            <FaTimes />
+          </button>
           <ul className="navbar-nav">
             <li className="nav-item">
-              <Link to="/about" className="nav-link">
+              <Link to="/about" className="nav-link" onClick={handleLinkClick}>
                 <FaInfoCircle /> About
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/contact" className="nav-link">
+              <Link to="/contact" className="nav-link" onClick={handleLinkClick}>
                 <FaEnvelope /> Contact
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/analyzer" className="nav-link">
+              <Link to="/analyzer" className="nav-link" onClick={handleLinkClick}>
                 <FaFlask /> Analyzer
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/history" className="nav-link">
+              <Link to="/history" className="nav-link" onClick={handleLinkClick}>
                 <FaHistory /> History
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/feedback" className="nav-link">
+              <Link to="/feedback" className="nav-link" onClick={handleLinkClick}>
                 <FaComment /> Feedback
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/health-tips" className="nav-link">
+              <Link to="/health-tips" className="nav-link" onClick={handleLinkClick}>
                 <FaBook /> Health Tips
               </Link>
             </li>
             <li className="nav-item">
               <button
-                onClick={toggleTheme}
+                onClick={() => {
+                  toggleTheme();
+                  handleLinkClick();
+                }}
                 className="nav-link btn btn-link"
                 aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
               >
@@ -215,351 +265,443 @@ function Navbar({ toggleTheme, theme }) {
             </li>
           </ul>
         </div>
-      </div>
-    </nav>
-  );
-}
-
-function Analyzer() {
-  const navigate = useNavigate();
-  const { analysisState, setAnalysisState } = useContext(AnalysisContext);
-
-  const {
-    file,
-    responseMessage,
-    preview,
-    extractedText,
-    prediction,
-    showPreviewModal,
-    showExtractedTextModal,
-  } = analysisState;
-
-  useEffect(() => {
-    let completionRate = 0;
-    if (file) completionRate += 25;
-    if (extractedText) completionRate += 25;
-    if (prediction) completionRate += 50;
-    setAnalysisState((prev) => ({
-      ...prev,
-      completion: { ...prev.completion, analyzer: completionRate },
-    }));
-  }, [file, extractedText, prediction, setAnalysisState]);
-
-  // Add Escape key support for modals
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        if (showPreviewModal) {
-          setAnalysisState((prevState) => ({
-            ...prevState,
-            showPreviewModal: false,
-          }));
-        }
-        if (showExtractedTextModal) {
-          setAnalysisState((prevState) => ({
-            ...prevState,
-            showExtractedTextModal: false,
-          }));
-        }
-      }
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [showPreviewModal, showExtractedTextModal, setAnalysisState]);
-
-  const handleFileUpload = async (e) => {
-    e.preventDefault();
-    if (!file) {
-      setAnalysisState((prevState) => ({
-        ...prevState,
-        responseMessage: "⚠️ Please select a file to upload.",
-      }));
-      return;
-    }
-
-    setAnalysisState((prevState) => ({
-      ...prevState,
-      loading: true,
-    }));
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const response = await fetch("http://127.0.0.1:5000/process-file", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server responded with status ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log("Backend Response:", data); // Log the response for debugging
-
-      // Save to history
-      const history = JSON.parse(localStorage.getItem("analysisHistory")) || [];
-      history.push({
-        date: new Date().toLocaleString(),
-        risk_level: data.prediction.risk_level,
-        status: data.prediction.status,
-        out_of_range: data.prediction.out_of_range,
-      });
-      localStorage.setItem("analysisHistory", JSON.stringify(history));
-
-      setAnalysisState({
-        ...analysisState,
-        responseMessage: "✅ File processed successfully!",
-        extractedText: data.extracted_text,
-        prediction: data.prediction,
-        loading: false,
-      });
-    } catch (error) {
-      setAnalysisState({
-        ...analysisState,
-        responseMessage: `❌ Error: ${error.message || "Error connecting to the server."}`,
-        loading: false,
-      });
-    }
-  };
-
-  // Share Report as PDF
-  const handleShareReport = () => {
-    const element = document.createElement("div");
-    element.innerHTML = `
-      <h2>BloodCheck Advisor Report</h2>
-      <h3>Analysis Summary</h3>
-      <p>Risk Level: ${prediction.risk_level}</p>
-      <p>Status: ${prediction.status}</p>
-      <h3>Out-of-Range Parameters</h3>
-      ${
-        prediction.out_of_range
-          .filter((item) => item.explanation && item.remedy)
-          .map(
-            (item) =>
-              `<p><strong>${item.parameter} (${item.result} ${item.unit}) - ${item.flag}</strong><br>Explanation: ${item.explanation}<br>Remedy: ${item.remedy}</p>`
-          )
-          .join("")
-      }
-    `;
-    const opt = {
-      margin: 1,
-      filename: "BloodCheck_Report.pdf",
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-    };
-    html2pdf().set(opt).from(element).save();
-  };
-
-  // Close the preview modal when clicking outside
-  const handlePreviewOverlayClick = (e) => {
-    if (e.target.classList.contains("modal-overlay")) {
-      setAnalysisState((prevState) => ({
-        ...prevState,
-        showPreviewModal: false,
-      }));
-    }
-  };
-
-  // Close the extracted text modal when clicking outside
-  const handleExtractedTextOverlayClick = (e) => {
-    if (e.target.classList.contains("modal-overlay")) {
-      setAnalysisState((prevState) => ({
-        ...prevState,
-        showExtractedTextModal: false,
-      }));
-    }
-  };
-
-  return (
-    <div className="analyzer-container d-flex justify-content-center align-items-start min-vh-100">
-      <div className="text-center p-4 rounded shadow-lg" style={{ maxWidth: "700px" }}>
-        <ProgressBar page="analyzer" />
-        {/* Preview Section */}
-        <div className="preview-section mb-4">
-          <h1 className="mt-4">Upload Your Blood Report</h1>
-          <form onSubmit={handleFileUpload} className="mt-4">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const selectedFile = e.target.files[0];
-                setAnalysisState((prevState) => ({
-                  ...prevState,
-                  file: selectedFile,
-                  preview: selectedFile && selectedFile.type.startsWith("image/")
-                    ? URL.createObjectURL(selectedFile)
-                    : null,
-                }));
-              }}
-            />
+        <div className="navbar-nav d-none d-md-flex justify-content-end">
+          <li className="nav-item">
+            <Link to="/about" className="nav-link" onClick={handleLinkClick}>
+              <FaInfoCircle /> About
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/contact" className="nav-link" onClick={handleLinkClick}>
+              <FaEnvelope /> Contact
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/analyzer" className="nav-link" onClick={handleLinkClick}>
+              <FaFlask /> Analyzer
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/history" className="nav-link" onClick={handleLinkClick}>
+              <FaHistory /> History
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/feedback" className="nav-link" onClick={handleLinkClick}>
+              <FaComment /> Feedback
+            </Link>
+          </li>
+          <li className="nav-item">
+            <Link to="/health-tips" className="nav-link" onClick={handleLinkClick}>
+              <FaBook /> Health Tips
+            </Link>
+          </li>
+          <li className="nav-item">
             <button
-              type="submit"
-              disabled={analysisState.loading}
-              className="btn btn-success ms-2"
+              onClick={() => {
+                toggleTheme();
+                handleLinkClick();
+              }}
+              className="nav-link btn btn-link"
+              aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
             >
-              {analysisState.loading ? "Analyzing..." : "Analyze"}
+              {theme === "light" ? "🌙 " : "☀️ "}
             </button>
-          </form>
-          {responseMessage && <p className="mt-3">{responseMessage}</p>}
-          <div className="preview-buttons mt-3">
-            {preview && (
-              <button
-                onClick={() =>
-                  setAnalysisState((prevState) => ({
-                    ...prevState,
-                    showPreviewModal: true,
-                  }))
-                }
-                className="btn btn-secondary me-2"
-              >
-                Preview Uploaded Report
-              </button>
-            )}
-            {extractedText && (
-              <button
-                onClick={() =>
-                  setAnalysisState((prevState) => ({
-                    ...prevState,
-                    showExtractedTextModal: true,
-                  }))
-                }
-                className="btn btn-info"
-              >
-                View Extracted Text
-              </button>
-            )}
+            </li>
           </div>
         </div>
+      </nav>
+    );
+  }
 
-        {/* Prediction Results Split into Two Sections Below Buttons */}
-        {prediction && (
-          <div className="results-grid mt-4">
-            {/* Section 1: Analysis Summary */}
-            <div className="results-section">
-              <h2>Analysis Summary</h2>
-              <p>
-                Risk Level:{" "}
-                {prediction.risk_level === "Low Risk" ? (
-                  <span className="text-success">✅ {prediction.risk_level}</span>
-                ) : prediction.risk_level === "Moderate Risk" ? (
-                  <span className="text-warning">⚠️ {prediction.risk_level}</span>
-                ) : (
-                  <span className="text-danger">🚨 {prediction.risk_level}</span>
-                )}
-              </p>
-              <p>
-                Status:{" "}
-                {prediction.status === "Safe" ? (
-                  <span className="text-success">✅ Safe</span>
-                ) : (
-                  <span className="text-danger">⚠️ Need Attention</span>
-                )}
-              </p>
-              <button onClick={handleShareReport} className="btn btn-primary mt-2">
-                Share Report
+  function Analyzer() {
+    const navigate = useNavigate();
+    const { analysisState, setAnalysisState } = useContext(AnalysisContext);
+
+    const {
+      file,
+      responseMessage,
+      preview,
+      extractedText,
+      prediction,
+      showPreviewModal,
+      showExtractedTextModal,
+    } = analysisState;
+
+    const [showCompleteDetailsModal, setShowCompleteDetailsModal] = useState(false); // State for popup modal
+
+    useEffect(() => {
+      let completionRate = 0;
+      if (file) completionRate += 25;
+      if (extractedText) completionRate += 25;
+      if (prediction) completionRate += 50;
+      setAnalysisState((prev) => ({
+        ...prev,
+        completion: { ...prev.completion, analyzer: completionRate },
+      }));
+    }, [file, extractedText, prediction, setAnalysisState]);
+
+    // Add Escape key support for modals
+    useEffect(() => {
+      const handleEscape = (event) => {
+        if (event.key === "Escape") {
+          if (showPreviewModal) {
+            setAnalysisState((prevState) => ({
+              ...prevState,
+              showPreviewModal: false,
+            }));
+          }
+          if (showExtractedTextModal) {
+            setAnalysisState((prevState) => ({
+              ...prevState,
+              showExtractedTextModal: false,
+            }));
+          }
+          if (showCompleteDetailsModal) {
+            setShowCompleteDetailsModal(false);
+          }
+        }
+      };
+      window.addEventListener("keydown", handleEscape);
+      return () => window.removeEventListener("keydown", handleEscape);
+    }, [showPreviewModal, showExtractedTextModal, showCompleteDetailsModal, setAnalysisState]);
+
+    const handleFileUpload = async (e) => {
+      e.preventDefault();
+      if (!file) {
+        setAnalysisState((prevState) => ({
+          ...prevState,
+          responseMessage: "⚠️ Please select a file to upload.",
+        }));
+        return;
+      }
+
+      setAnalysisState((prevState) => ({
+        ...prevState,
+        loading: true,
+      }));
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("http://172.16.4.178:5000/process-file", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Backend Response:", data); // Log the response for debugging
+
+        // Save to history
+        const history = JSON.parse(localStorage.getItem("analysisHistory")) || [];
+        history.push({
+          date: new Date().toLocaleString(),
+          risk_level: data.prediction.risk_level,
+          status: data.prediction.status,
+          out_of_range: data.prediction.out_of_range,
+        });
+        localStorage.setItem("analysisHistory", JSON.stringify(history));
+
+        setAnalysisState({
+          ...analysisState,
+          responseMessage: "✅ File processed successfully!",
+          extractedText: data.extracted_text,
+          prediction: data.prediction,
+          loading: false,
+        });
+      } catch (error) {
+        setAnalysisState({
+          ...analysisState,
+          responseMessage: `❌ Error: ${error.message || "Error connecting to the server."}`,
+          loading: false,
+        });
+      }
+    };
+
+    // Share Report as PDF
+    const handleShareReport = () => {
+      const element = document.createElement("div");
+      element.innerHTML = `
+        <h2>BloodCheck Advisor Report</h2>
+        <h3>Analysis Summary</h3>
+        <p>Risk Level: ${prediction?.risk_level || "N/A"}</p>
+        <p>Status: ${prediction?.status || "N/A"}</p>
+        ${
+          showCompleteDetailsModal
+            ? `
+              <h3>Complete Report Details</h3>
+              ${
+                prediction?.out_of_range && prediction.out_of_range.length > 0
+                  ? prediction.out_of_range
+                      .map(
+                        (item) =>
+                          `<li><strong>${item.parameter} (${item.result} ${item.unit}) - ${item.flag}</strong>: ${item.explanation || "N/A"}</li>`
+                      )
+                      .join("")
+                  : `<li>No out-of-range values detected. All parameters are within normal limits, indicating a generally healthy profile.</li>`
+              }
+            `
+            : ""
+        }
+      `;
+      const opt = {
+        margin: 1,
+        filename: "BloodCheck_Report.pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+      };
+      html2pdf().set(opt).from(element).save();
+    };
+
+    // Close the preview modal when clicking outside
+    const handlePreviewOverlayClick = (e) => {
+      if (e.target.classList.contains("modal-overlay")) {
+        setAnalysisState((prevState) => ({
+          ...prevState,
+          showPreviewModal: false,
+        }));
+      }
+    };
+
+    // Close the extracted text modal when clicking outside
+    const handleExtractedTextOverlayClick = (e) => {
+      if (e.target.classList.contains("modal-overlay")) {
+        setAnalysisState((prevState) => ({
+          ...prevState,
+          showExtractedTextModal: false,
+        }));
+      }
+    };
+
+    // Close the complete details modal when clicking outside
+    const handleCompleteDetailsOverlayClick = (e) => {
+      if (e.target.classList.contains("modal-overlay")) {
+        setShowCompleteDetailsModal(false);
+      }
+    };
+
+    return (
+      <div className="analyzer-container d-flex justify-content-center align-items-start min-vh-100">
+        <div className="text-center p-4 rounded shadow-lg" style={{ maxWidth: "700px" }}>
+          <ProgressBar page="analyzer" />
+          {/* Preview Section */}
+          <div className="preview-section mb-4">
+            <h1 className="mt-4">Upload Your Blood Report</h1>
+            <form onSubmit={handleFileUpload} className="mt-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const selectedFile = e.target.files[0];
+                  setAnalysisState((prevState) => ({
+                    ...prevState,
+                    file: selectedFile,
+                    preview: selectedFile && selectedFile.type.startsWith("image/")
+                      ? URL.createObjectURL(selectedFile)
+                      : null,
+                  }));
+                }}
+              />
+              <button
+                type="submit"
+                disabled={analysisState.loading}
+                className="btn btn-success ms-2"
+              >
+                {analysisState.loading ? "Analyzing..." : "Analyze"}
               </button>
-            </div>
-
-            {/* Section 2: Recommended Actions */}
-            <div className="results-section">
-              <h2>Recommended Actions</h2>
-              {prediction.out_of_range && prediction.out_of_range.length > 0 ? (
-                <>
-                  {(() => {
-                    const outOfRangeCount = prediction.out_of_range.filter(
-                      (item) => item.explanation && item.remedy
-                    ).length;
-                    return outOfRangeCount > 0 ? (
-                      <p>
-                        {outOfRangeCount} parameter{outOfRangeCount !== 1 ? "s" : ""} {outOfRangeCount !== 1 ? "are" : "is"} out of range. Click below to view detailed recommendations.
-                      </p>
-                    ) : (
-                      <p>No out-of-range values detected.</p>
-                    );
-                  })()}
-                  <button
-                    onClick={() =>
-                      navigate("/recommendation-details", {
-                        state: {
-                          recommendations: prediction?.out_of_range,
-                          from: "/analyzer",
-                        },
-                      })
-                    }
-                    className="btn btn-primary mt-2"
-                  >
-                    View Detailed Recommendations
-                  </button>
-                </>
-              ) : (
-                <p>No out-of-range values detected.</p>
+            </form>
+            {responseMessage && <p className="mt-3">{responseMessage}</p>}
+            <div className="preview-buttons mt-3">
+              {preview && (
+                <button
+                  onClick={() =>
+                    setAnalysisState((prevState) => ({
+                      ...prevState,
+                      showPreviewModal: true,
+                    }))
+                  }
+                  className="btn btn-secondary me-2"
+                >
+                  Preview Uploaded Report
+                </button>
+              )}
+              {extractedText && (
+                <button
+                  onClick={() =>
+                    setAnalysisState((prevState) => ({
+                      ...prevState,
+                      showExtractedTextModal: true,
+                    }))
+                  }
+                  className="btn btn-info"
+                >
+                  View Extracted Text
+                </button>
               )}
             </div>
           </div>
-        )}
 
-        {/* Preview Modal */}
-        {preview && showPreviewModal && (
-          <FocusTrap>
-            <div className="modal-overlay" onClick={handlePreviewOverlayClick}>
-              <div className="modal-content bg-light p-4 rounded">
-                <div className="modal-header">
-                  <h2 className="mb-3">Report Preview</h2>
-                  <button
-                    onClick={() =>
-                      setAnalysisState((prevState) => ({
-                        ...prevState,
-                        showPreviewModal: false,
-                      }))
-                    }
-                    className="modal-close-btn"
-                    aria-label="Close preview modal"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="modal-body">
-                  <img src={preview} alt="Report Preview" className="preview-image mt-3" />
-                </div>
+          {/* Prediction Results Split into Two Sections Below Buttons */}
+          {prediction && (
+            <div className="results-grid mt-4">
+              {/* Section 1: Analysis Summary */}
+              <div className="results-section">
+                <h2>Analysis Summary</h2>
+                <p>
+                  Risk Level:{" "}
+                  {prediction.risk_level === "Low Risk" ? (
+                    <span className="text-success">✅ {prediction.risk_level}</span>
+                  ) : prediction.risk_level === "Moderate Risk" ? (
+                    <span className="text-warning">⚠️ {prediction.risk_level}</span>
+                  ) : (
+                    <span className="text-danger">🚨 {prediction.risk_level}</span>
+                  )}
+                </p>
+                <p>
+                  Status:{" "}
+                  {prediction.status === "Safe" ? (
+                    <span className="text-success">✅ Safe</span>
+                  ) : (
+                    <span className="text-danger">⚠️ Need Attention</span>
+                  )}
+                </p>
+                <button onClick={handleShareReport} className="btn btn-primary mt-2">
+                  Share Report
+                </button>
+              </div>
+
+              {/* Section 2: Button to Trigger Popup */}
+              <div className="results-section">
+                <button
+                  onClick={() => setShowCompleteDetailsModal(true)}
+                  className="btn btn-secondary mt-2"
+                >
+                  View Complete Report Details
+                </button>
               </div>
             </div>
-          </FocusTrap>
-        )}
+          )}
 
-        {/* Extracted Text Modal */}
-        {extractedText && showExtractedTextModal && (
-          <FocusTrap>
-            <div className="modal-overlay" onClick={handleExtractedTextOverlayClick}>
-              <div className="modal-content bg-light p-4 rounded">
-                <div className="modal-header">
-                  <h2 className="mb-3">Extracted Text</h2>
-                  <button
-                    onClick={() =>
-                      setAnalysisState((prevState) => ({
-                        ...prevState,
-                        showExtractedTextModal: false,
-                      }))
-                    }
-                    className="modal-close-btn"
-                    aria-label="Close extracted text modal"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="modal-body">
-                  <p>{extractedText}</p>
+          {/* Complete Report Details Modal */}
+          {prediction && showCompleteDetailsModal && (
+            <FocusTrap>
+              <div className="modal-overlay" onClick={handleCompleteDetailsOverlayClick}>
+                <div className="modal-content bg-light p-4 rounded" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
+                  <div className="modal-header">
+                    <h2 className="mb-3">Complete Report Details</h2>
+                    <button
+                      onClick={() => setShowCompleteDetailsModal(false)}
+                      className="modal-close-btn"
+                      aria-label="Close complete report details modal"
+                    >
+                      <FaTimesCircle />
+                    </button>
+                  </div>
+                  <div className="modal-body">
+                    <ul className="details-list">
+                      {prediction.out_of_range && prediction.out_of_range.length > 0 ? (
+                        prediction.out_of_range.map((item, index) => (
+                          <li key={index}>
+                            <strong>
+                              {item.parameter} ({item.result} {item.unit}) - {item.flag}
+                            </strong>
+                            : {item.explanation || "No specific explanation available."}
+                          </li>
+                        ))
+                      ) : (
+                        <li>
+                          No out-of-range values detected. All parameters are within normal limits,
+                          indicating a generally healthy profile. Normal ranges are based on standard
+                          medical guidelines and may vary slightly depending on age, sex, and
+                          laboratory standards.
+                        </li>
+                      )}
+                    </ul>
+                    <button
+                      onClick={() =>
+                        navigate("/recommendation-details", {
+                          state: {
+                            recommendations: prediction?.out_of_range,
+                            from: "/analyzer",
+                          },
+                        })
+                      }
+                      className="btn btn-primary mt-3"
+                      disabled={!prediction?.out_of_range?.length}
+                    >
+                      View Remedies
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </FocusTrap>
-        )}
+            </FocusTrap>
+          )}
+
+          {/* Preview Modal */}
+          {preview && showPreviewModal && (
+            <FocusTrap>
+              <div className="modal-overlay" onClick={handlePreviewOverlayClick}>
+                <div className="modal-content bg-light p-4 rounded">
+                  <div className="modal-header">
+                    <h2 className="mb-3">Report Preview</h2>
+                    <button
+                      onClick={() =>
+                        setAnalysisState((prevState) => ({
+                          ...prevState,
+                          showPreviewModal: false,
+                        }))
+                      }
+                      className="modal-close-btn"
+                      aria-label="Close preview modal"
+                    >
+                      <FaTimesCircle />
+                    </button>
+                  </div>
+                  <div className="modal-body">
+                    <img src={preview} alt="Report Preview" className="preview-image mt-3" />
+                  </div>
+                </div>
+              </div>
+            </FocusTrap>
+          )}
+
+          {/* Extracted Text Modal */}
+          {extractedText && showExtractedTextModal && (
+            <FocusTrap>
+              <div className="modal-overlay" onClick={handleExtractedTextOverlayClick}>
+                <div className="modal-content bg-light p-4 rounded">
+                  <div className="modal-header">
+                    <h2 className="mb-3">Extracted Text</h2>
+                    <button
+                      onClick={() =>
+                        setAnalysisState((prevState) => ({
+                          ...prevState,
+                          showExtractedTextModal: false,
+                        }))
+                      }
+                      className="modal-close-btn"
+                      aria-label="Close extracted text modal"
+                    >
+                      <FaTimesCircle />
+                    </button>
+                  </div>
+                  <div className="modal-body">
+                    <p>{extractedText}</p>
+                  </div>
+                </div>
+              </div>
+            </FocusTrap>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 // Footer Component
 function Footer() {
